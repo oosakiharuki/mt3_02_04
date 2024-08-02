@@ -121,9 +121,7 @@ void DrawTriangle(const Triangle& triangle ,const Matrix4x4& viewProjectionMatri
 	Vector3 T1 = Transform(Transform(triangle.vertices[1], viewProjectionMatrix), viewportMatrix);
 	Vector3 T2 = Transform(Transform(triangle.vertices[2], viewProjectionMatrix), viewportMatrix);
 
-	Novice::DrawLine(int(T0.x), int(T0.y), int(T1.x), int(T1.y), WHITE);
-	Novice::DrawLine(int(T1.x), int(T1.y), int(T2.x), int(T2.y), WHITE);
-	Novice::DrawLine(int(T2.x), int(T2.y), int(T0.x), int(T0.y), WHITE);
+	Novice::DrawTriangle((int)T0.x, (int)T0.y, (int)T1.x, (int)T1.y, (int)T2.x, (int)T2.y, WHITE, kFillModeWireFrame);
 }
 
 
@@ -133,6 +131,31 @@ float Dot(const Vector3& v1, const Vector3& v2) {
 	return result;
 }
 
+struct Plane {
+	Vector3 normal;
+	float distance;
+};
+
+void DrawPlane(const Plane& plane, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix) {
+	Vector3 center = MultiplyPlane(plane.distance, plane.normal);
+	Vector3 perpendiculars[4];
+	perpendiculars[0] = Normalize(Perpendicular(plane.normal));
+	perpendiculars[1] = { -perpendiculars[0].x,-perpendiculars[0].y,-perpendiculars[0].z };
+	perpendiculars[2] = Cross(plane.normal, perpendiculars[0]);
+	perpendiculars[3] = { -perpendiculars[2].x,-perpendiculars[2].y,-perpendiculars[2].z };
+
+	Vector3 points[4];
+	for (int32_t index = 0; index < 4; ++index) {
+		Vector3 extend = MultiplyPlane(2.0f, perpendiculars[index]);
+		Vector3 point = Add(center, extend);
+		points[index] = Transform(Transform(point, viewProjectionMatrix), viewportMatrix);
+	}
+
+	Novice::DrawLine((int)points[0].x, (int)points[0].y, (int)points[2].x, (int)points[2].y, WHITE);
+	Novice::DrawLine((int)points[0].x, (int)points[0].y, (int)points[3].x, (int)points[3].y, WHITE);
+	Novice::DrawLine((int)points[1].x, (int)points[1].y, (int)points[2].x, (int)points[2].y, WHITE);
+	Novice::DrawLine((int)points[1].x, (int)points[1].y, (int)points[3].x, (int)points[3].y, WHITE);
+}
 
 bool IsCollision(const Segment& s1, const Triangle& v2) {
 
@@ -140,30 +163,51 @@ bool IsCollision(const Segment& s1, const Triangle& v2) {
 	Vector3 v12 = { v2.vertices[2].x - v2.vertices[1].x,v2.vertices[2].y - v2.vertices[1].y,v2.vertices[2].z - v2.vertices[1].z };
 	Vector3 v20 = { v2.vertices[0].x - v2.vertices[2].x,v2.vertices[0].y - v2.vertices[2].y,v2.vertices[0].z - v2.vertices[2].z };
 
-	float t0 = ((v2.vertices[0].x * s1.diff.x) + (v2.vertices[0].y * s1.diff.y) + (v2.vertices[0].z * s1.diff.z)) / ((s1.diff.x * s1.diff.x) + (s1.diff.y * s1.diff.y) + (s1.diff.z * s1.diff.z));
-	float t1 = ((v2.vertices[1].x * s1.diff.x) + (v2.vertices[1].y * s1.diff.y) + (v2.vertices[1].z * s1.diff.z)) / ((s1.diff.x * s1.diff.x) + (s1.diff.y * s1.diff.y) + (s1.diff.z * s1.diff.z));
-	float t2 = ((v2.vertices[2].x * s1.diff.x) + (v2.vertices[2].y * s1.diff.y) + (v2.vertices[2].z * s1.diff.z)) / ((s1.diff.x * s1.diff.x) + (s1.diff.y * s1.diff.y) + (s1.diff.z * s1.diff.z));
+	Vector3 normal = Normalize(Cross(v01, v12));
+	Plane plane = {normal,Dot(v2.vertices[0],normal)};
 
-	Vector3 vp[3]{};
-	vp[0].x = s1.origin.x + (t0 * s1.diff.x);
-	vp[0].y = s1.origin.y + (t0 * s1.diff.y);	
-	vp[0].z = s1.origin.z + (t0 * s1.diff.z);
+	float dot = Dot(plane.normal, s1.diff);
+	if (dot == 0)
+	{
+		return false;
+	}
 
-	vp[1].x = s1.origin.x + (t1 * s1.diff.x);
-	vp[1].y = s1.origin.y + (t1 * s1.diff.y);
-	vp[1].z = s1.origin.z + (t1 * s1.diff.z);
+	float tSenbun = (plane.distance - Dot(s1.origin, plane.normal)) / dot;
 
-	vp[2].x = s1.origin.x + (t2 * s1.diff.x);
-	vp[2].y = s1.origin.y + (t2 * s1.diff.y);
-	vp[2].z = s1.origin.z + (t2 * s1.diff.z);
+	float t = ((v2.vertices[0].x * s1.diff.x) + (v2.vertices[0].y * s1.diff.y) + (v2.vertices[0].z * s1.diff.z)) / ((s1.diff.x * s1.diff.x) + (s1.diff.y * s1.diff.y) + (s1.diff.z * s1.diff.z));
 
-	Vector3 cross01 = Cross(v01,vp[1]);
-	Vector3 cross12 = Cross(v12,vp[2]);
-	Vector3 cross20 = Cross(v20,vp[0]);
+	Vector3 cp{};
+	cp.x = s1.origin.x + (t * s1.diff.x);
+	cp.y = s1.origin.y + (t * s1.diff.y);
+	cp.z = s1.origin.z + (t * s1.diff.z);
 
-	if (Dot(cross01, v2.vertices[0]) >= 0.0f &&
-		Dot(cross12, v2.vertices[1]) >= 0.0f &&
-		Dot(cross20, v2.vertices[2]) >= 0.0f) {
+	//cp - それぞれの頂点
+
+	Vector3 v0p = {};
+	v0p.x = cp.x - v2.vertices[0].x;
+	v0p.y = cp.y - v2.vertices[0].y;
+	v0p.z = cp.z - v2.vertices[0].z;
+
+	Vector3 v1p = {};
+	v1p.x = cp.x - v2.vertices[1].x;
+	v1p.y = cp.y - v2.vertices[1].y;
+	v1p.z = cp.z - v2.vertices[1].z;
+
+	Vector3 v2p = {};
+	v2p.x = cp.x - v2.vertices[2].x;
+	v2p.y = cp.y - v2.vertices[2].y;
+	v2p.z = cp.z - v2.vertices[2].z;
+
+
+
+	Vector3 cross01 = Cross(v01, v1p);
+	Vector3 cross12 = Cross(v12, v2p);
+	Vector3 cross20 = Cross(v20, v0p);
+	
+	if (Dot(cross01, normal) >= 0.0f &&
+		Dot(cross12, normal) >= 0.0f &&
+		Dot(cross20, normal) >= 0.0f &&
+		tSenbun > 0 && tSenbun < 1) {
 		return true;
 	}
 
@@ -187,7 +231,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Vector3 cameraRotate = { -0.16f,0.0f,0.0f };
 
 
-	Segment segment{ { 0.0f,-1.0f,-0.5f} ,{0.0f,0.0f,2.0f} };
+	Segment segment{ { 0.0f,0.5f,-1.0f} ,{0.0f,0.0f,2.0f} };
 	
 	Triangle triangle = {
 		.vertices
