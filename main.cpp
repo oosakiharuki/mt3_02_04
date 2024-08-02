@@ -81,8 +81,6 @@ struct Segment {
 //三角
 struct Triangle {
 	Vector3 vertices[3];
-	Vector3 normal;
-	float distance;
 };
 
 Vector3 Normalize(const Vector3& v) {
@@ -138,40 +136,34 @@ float Dot(const Vector3& v1, const Vector3& v2) {
 
 bool IsCollision(const Segment& s1, const Triangle& v2) {
 
-	Vector3 v0p = { v2.vertices[0].x - s1.origin.x,v2.vertices[0].y - s1.origin.y,v2.vertices[0].z - s1.origin.z };
-	Vector3 v1p = { v2.vertices[1].x - s1.origin.x,v2.vertices[1].y - s1.origin.y,v2.vertices[1].z - s1.origin.z };
-	Vector3 v2p = { v2.vertices[2].x - s1.origin.x,v2.vertices[2].y - s1.origin.y,v2.vertices[2].z - s1.origin.z };
+	Vector3 v01 = { v2.vertices[1].x - v2.vertices[0].x,v2.vertices[1].y - v2.vertices[0].y,v2.vertices[1].z - v2.vertices[0].z };
+	Vector3 v12 = { v2.vertices[2].x - v2.vertices[1].x,v2.vertices[2].y - v2.vertices[1].y,v2.vertices[2].z - v2.vertices[1].z };
+	Vector3 v20 = { v2.vertices[0].x - v2.vertices[2].x,v2.vertices[0].y - v2.vertices[2].y,v2.vertices[0].z - v2.vertices[2].z };
 
-	float t0 = (((v0p.x + v0p.y + v0p.z) * (s1.diff.x + s1.diff.y + s1.diff.z)) / ((s1.diff.x + s1.diff.y + s1.diff.z) * (s1.diff.x + s1.diff.y + s1.diff.z)));
-	float t1 = (((v1p.x + v1p.y + v1p.z) * (s1.diff.x + s1.diff.y + s1.diff.z)) / ((s1.diff.x + s1.diff.y + s1.diff.z) * (s1.diff.x + s1.diff.y + s1.diff.z)));
-	float t2 = (((v2p.x + v2p.y + v2p.z) * (s1.diff.x + s1.diff.y + s1.diff.z)) / ((s1.diff.x + s1.diff.y + s1.diff.z) * (s1.diff.x + s1.diff.y + s1.diff.z)));
+	float t0 = ((v2.vertices[0].x * s1.diff.x) + (v2.vertices[0].y * s1.diff.y) + (v2.vertices[0].z * s1.diff.z)) / ((s1.diff.x * s1.diff.x) + (s1.diff.y * s1.diff.y) + (s1.diff.z * s1.diff.z));
+	float t1 = ((v2.vertices[1].x * s1.diff.x) + (v2.vertices[1].y * s1.diff.y) + (v2.vertices[1].z * s1.diff.z)) / ((s1.diff.x * s1.diff.x) + (s1.diff.y * s1.diff.y) + (s1.diff.z * s1.diff.z));
+	float t2 = ((v2.vertices[2].x * s1.diff.x) + (v2.vertices[2].y * s1.diff.y) + (v2.vertices[2].z * s1.diff.z)) / ((s1.diff.x * s1.diff.x) + (s1.diff.y * s1.diff.y) + (s1.diff.z * s1.diff.z));
 
+	Vector3 vp[3]{};
+	vp[0].x = s1.origin.x + (t0 * s1.diff.x);
+	vp[0].y = s1.origin.y + (t0 * s1.diff.y);	
+	vp[0].z = s1.origin.z + (t0 * s1.diff.z);
 
-	Vector3 vertex[3]{};
+	vp[1].x = s1.origin.x + (t1 * s1.diff.x);
+	vp[1].y = s1.origin.y + (t1 * s1.diff.y);
+	vp[1].z = s1.origin.z + (t1 * s1.diff.z);
 
+	vp[2].x = s1.origin.x + (t2 * s1.diff.x);
+	vp[2].y = s1.origin.y + (t2 * s1.diff.y);
+	vp[2].z = s1.origin.z + (t2 * s1.diff.z);
 
-	vertex[0].x = s1.origin.x + (t0 * s1.diff.x);
-	vertex[0].y = s1.origin.y + (t0 * s1.diff.y);	
-	vertex[0].z = s1.origin.z + (t0 * s1.diff.z);
+	Vector3 cross01 = Cross(v01,vp[1]);
+	Vector3 cross12 = Cross(v12,vp[2]);
+	Vector3 cross20 = Cross(v20,vp[0]);
 
-	vertex[1].x = s1.origin.x + (t1 * s1.diff.x);
-	vertex[1].y = s1.origin.y + (t1 * s1.diff.y);
-	vertex[1].z = s1.origin.z + (t1 * s1.diff.z);
-
-	vertex[2].x = s1.origin.x + (t2 * s1.diff.x);
-	vertex[2].y = s1.origin.y + (t2 * s1.diff.y);
-	vertex[2].z = s1.origin.z + (t2 * s1.diff.z);
- 
-
-	Vector3 cross01 = Cross(v2.vertices[0], vertex[1]);
-	Vector3 cross12 = Cross(v2.vertices[1], vertex[2]);
-	Vector3 cross20 = Cross(v2.vertices[2], vertex[0]);
-
-
-
-	if (Dot(cross01, v2.normal) >= 0.0f &&
-		Dot(cross12, v2.normal) >= 0.0f &&
-		Dot(cross20, v2.normal) >= 0.0f) {
+	if (Dot(cross01, v2.vertices[0]) >= 0.0f &&
+		Dot(cross12, v2.vertices[1]) >= 0.0f &&
+		Dot(cross20, v2.vertices[2]) >= 0.0f) {
 		return true;
 	}
 
@@ -195,7 +187,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Vector3 cameraRotate = { -0.16f,0.0f,0.0f };
 
 
-	Segment segment{ {-2.0f,-1.0f,0.0f} ,{3.0f,2.0f,2.0f} };
+	Segment segment{ { 0.0f,-1.0f,-0.5f} ,{0.0f,0.0f,2.0f} };
 	
 	Triangle triangle = {
 		.vertices
@@ -206,8 +198,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		}
 	};
 
-	triangle.normal = { -0.5f,0.0f,0.0f };
-	triangle.distance = 0.0f;
+	//triangle.vertices[1] = Cross(triangle.vertices[0], triangle.vertices[2]);
+
+
 
 	
 	uint32_t Color = WHITE;
